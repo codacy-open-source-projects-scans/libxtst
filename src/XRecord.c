@@ -726,10 +726,12 @@ parse_reply_call_callback(
 {
     XRecordInterceptData *data;
     unsigned int current_index;
+    unsigned int end;
     int datum_bytes = 0;
 
     /* call the callback for each protocol element in the reply */
     current_index = 0;
+    end = rep->length << 2;
     do {
 	data = alloc_inter_data(info);
 	if (!data)
@@ -839,10 +841,10 @@ parse_reply_call_callback(
 	}
 
 	if (datum_bytes > 0) {
-	    if (INT_MAX - datum_bytes < (rep->length << 2) - current_index) {
+	    if ((unsigned int)datum_bytes > end - current_index) {
 		fprintf(stderr,
-			"XRecord: %lu-byte reply claims %d-byte element (seq %lu)\n",
-			(unsigned long)rep->length << 2, current_index + datum_bytes,
+			"XRecord: %u-byte reply claims %u-byte element (seq %lu)\n",
+			end, current_index + (unsigned int)datum_bytes,
 			dpy->last_request_read);
 		goto out;
 	    }
@@ -861,7 +863,7 @@ parse_reply_call_callback(
 	(*callback)(closure, data);
 
 	current_index += datum_bytes;
-    } while (current_index<rep->length<<2);
+    } while (current_index < end);
 
     if (rep->category == XRecordEndOfData)
 	return End;
