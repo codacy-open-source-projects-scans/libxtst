@@ -733,6 +733,8 @@ parse_reply_call_callback(
     current_index = 0;
     end = rep->length << 2;
     do {
+	unsigned int start_index = current_index;
+
 	data = alloc_inter_data(info);
 	if (!data)
 	    return Error;
@@ -808,6 +810,9 @@ parse_reply_call_callback(
 	    if (datum_bytes < 0 || datum_bytes > INT_MAX >> 2)
 		goto out;
 	    datum_bytes <<= 2;
+	    /* A client request cannot be zero-sized (incl. BIG-REQUESTS). */
+	    if (datum_bytes == 0)
+		goto out;
 	    break;
 	case XRecordClientStarted:
 	    if (reply == NULL)
@@ -838,7 +843,22 @@ parse_reply_call_callback(
 		goto out;
 	    datum_bytes = 0;
 	    break;
+	default:
+	    /*
+	     * A follow-up on the previous fix for CVE-2016-7952:
+	     * An unknown category would leave datum_bytes at 0 and
+	     * "livelock" the loop.
+	     */
+	    goto out;
 	}
+
+	/*
+	 * Malformed if this element neither grew nor advanced the index.
+	 * StartOfData / EndOfData are already rejected if current_index < end
+	 * so not a change in behavior.
+	 */
+	if (datum_bytes == 0 && current_index == start_index && current_index < end)
+	    goto out;
 
 	if (datum_bytes > 0) {
 	    if ((unsigned int)datum_bytes > end - current_index) {
